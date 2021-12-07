@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import sys
+import urllib
 
 from markdownify import markdownify
 import requests
@@ -46,7 +47,7 @@ class PageTemplater(object):
         self.category_manager = category_manager
         self.author_manager = author_manager
 
-    def template_frontmatter(self, model):
+    def template_frontmatter(self, model, additional=None):
         data = {}
         for key in self.model_keys:
             if key not in model:
@@ -67,13 +68,30 @@ class PageTemplater(object):
             else:
                 data[key] = model.get(key)
 
+        if additional:
+            data.update(additional)
+
         return yaml.dump(data)
 
     def template_body(self, model):
         return model.get('content', {}).get('rendered')
 
+    def redirects(self, model):
+        title = self.permalink(model).split('/')[-1]
+        # TODO Need to add category parents here too
+        return [f'/{category}/{title}' for category in model.get('categories')]
+
+
+
+    def permalink(self, model):
+        url = urllib.parse.urlparse(model.get('link'))
+        return url.path
+
     def template(self, model):
-        frontmatter = self.template_frontmatter(model)
+        additional = {}
+        additional['permalink'] = self.permalink(model)
+        additional['redirect_to'] = self.redirects(model)
+        frontmatter = self.template_frontmatter(model, additional)
         body = self.template_body(model)
         filename = '%s.md' % model.get('slug')
 
@@ -232,6 +250,15 @@ class EntityManager(object):
 
     def is_filtered(self, tag_list):
         return any(tag_id in self.filtered_ids for tag_id in tag_list)
+
+
+class Page(object):
+    def process(self):
+        # figure out the path to put the file
+        # template the file to path
+        # figure out what redirects to place
+        pass
+
 
 
 def main():
