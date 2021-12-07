@@ -90,7 +90,7 @@ class PageTemplater(object):
     def template(self, model):
         additional = {}
         additional['permalink'] = self.permalink(model)
-        additional['redirect_to'] = self.redirects(model)
+        additional['redirect_from'] = self.redirects(model)
         frontmatter = self.template_frontmatter(model, additional)
         body = self.template_body(model)
         filename = '%s.md' % model.get('slug')
