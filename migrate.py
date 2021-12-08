@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import re
 import sys
 import urllib
 
@@ -64,7 +65,6 @@ class PageTemplater(object):
                     data[key] = self.author_manager.get_slug(model.get(key))
                 except KeyError as e:
                     log.error(f'author={model.get(key)} not found')
-                    log.exception(e)
             else:
                 data[key] = model.get(key)
 
@@ -77,15 +77,46 @@ class PageTemplater(object):
         return model.get('content', {}).get('rendered')
 
     def redirects(self, model):
-        title = self.permalink(model).split('/')[-1]
-        # TODO Need to add category parents here too
-        return [f'/{category}/{title}' for category in model.get('categories')]
+        # Only posts have multiple URLs for some reason
+        if model.get('type') != 'post':
+            return []
 
+        permalink = self.permalink(model)
+        title = permalink.split('/')[-2]
+
+        # TODO Need to add category parents here too
+        redirects = set()
+        for category_id in model.get('categories'):
+            redirect = f'/{self.category_manager.get_slug(category_id)}/{title}/'
+
+            if permalink == redirect:
+                continue
+
+            # Add this redirect
+            redirects.add(redirect)
+
+            # Add parent categories, assume only one level of parent
+            category = self.category_manager.get(category_id)
+            parent_category_id = category.get('parent')
+            if parent_category_id != 0:
+                redirects.add(f'/{self.category_manager.get_slug(parent_category_id)}{redirect}')
+
+        return list(redirects)
 
 
     def permalink(self, model):
         url = urllib.parse.urlparse(model.get('link'))
-        return url.path
+        path = url.path
+        # Make sure to end with a /
+        if not path.endswith('/'):
+            path = path + '/'
+
+        return path
+
+    def get_filename(self, model):
+        #title = re.sub(r'[^a-z0-9_]+', '-', model.get('title').get('rendered').lower())
+        title = model.get('slug')
+        return '%s.md' % title
 
     def template(self, model):
         additional = {}
@@ -93,21 +124,31 @@ class PageTemplater(object):
         additional['redirect_from'] = self.redirects(model)
         frontmatter = self.template_frontmatter(model, additional)
         body = self.template_body(model)
-        filename = '%s.md' % model.get('slug')
+        filename = self.get_filename(model)
 
-        with self.file_writer(filename) as f:
-            f.write('---\n')
-            f.write(frontmatter)
-            f.write('---\n')
-            f.write(markdownify(body))
+        try:
+            with self.file_writer(filename) as f:
+                f.write('---\n')
+                f.write(frontmatter)
+                f.write('---\n')
+                f.write(markdownify(body))
+        except Exception as e:
+            log.exception(e)
 
     def file_writer(self, filename):
         path = os.path.join(self.path, filename)
         log.info(f'writing data for {path}')
         if os.path.exists(path):
-            raise Exception('path={path} already exists')
+            raise Exception(f'path={path} already exists')
 
         return open(path, 'wt')
+
+class PostTemplater(PageTemplater):
+    def get_filename(self, model):
+        pattern = r'(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})'
+        title = re.sub(r'[^a-z0-9_]+', '-', model.get('title').get('rendered').lower())
+        date = re.match(pattern, model.get('date'))
+        return '%s-%s-%s-%s.md' % (date.group('year'), date.group('month'), date.group('day'), title)
 
 
 class DataTemplater(PageTemplater):
@@ -237,6 +278,9 @@ class EntityManager(object):
 
     def get_slug(self, tag_id):
         return self.tag_index[tag_id].get('slug')
+
+    def get(self, tag_id):
+        return self.tag_index[tag_id]
 
     def add(self, tag):
         id = tag.get('id')
