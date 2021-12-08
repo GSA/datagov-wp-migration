@@ -15,3 +15,8 @@ Install python dependencies.
 Run the script.
 
     $ pipenv run python migrate.py
+
+Test the site with Jekyll.
+
+    $ bundle install
+    $ bundle exec jekyll build
