@@ -23,4 +23,4 @@ Test the site with Jekyll.
 
 Copy the markdown files to GSA/datagov-website.
 
-    $ cp -r output/ ../datagov-website/www.data.gov/
+    $ rsync -r output/ ../datagov-website/www.data.gov/
