@@ -101,7 +101,7 @@ class PageTemplater(object):
             if parent_category_id != 0:
                 redirects.add(f'/{self.category_manager.get_slug(parent_category_id)}{redirect}')
 
-        return list(redirects)
+        return sorted(list(redirects))
 
 
     def permalink(self, model):
@@ -120,6 +120,7 @@ class PageTemplater(object):
 
     def template(self, model):
         additional = {}
+        additional['layout'] = 'legacy-%s' % model.get('type')
         additional['permalink'] = self.permalink(model)
         additional['redirect_from'] = self.redirects(model)
         frontmatter = self.template_frontmatter(model, additional)
@@ -188,6 +189,7 @@ def template_authors(output, api, tag_manager, category_manager, author_manager)
 
 def index_categories(api, category_manager):
     for category in api.fetch_all('categories'):
+        # write out category to wp-json/category/category.get('id')
         category_manager.add(category)
 
 def index_tags(api, tag_manager):
@@ -223,7 +225,7 @@ def template_posts(output, api, tag_manager, category_manager, author_manager):
     ]
     posts_path = os.path.join(output, '_posts')
     os.makedirs(posts_path, exist_ok=True)
-    templater = PageTemplater(posts_path, posts_keys, tag_manager, category_manager, author_manager)
+    templater = PostTemplater(posts_path, posts_keys, tag_manager, category_manager, author_manager)
     for post in api.fetch_all('posts'):
         if tag_manager.is_filtered(post.get('tags')):
             # Skip any posts tagged with a filtered tag
